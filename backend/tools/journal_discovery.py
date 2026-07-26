@@ -69,13 +69,12 @@ def search_journal(query: str, max_results: int = 5) -> list[dict]:
     Returns a list of dicts: [{title, url, snippet}]
     """
     try:
-        from duckduckgo_search import DDGS
+        from ddgs import DDGS
 
         search_query = f"{query} author guidelines formatting"
         logger.info("[DISCOVERY] Searching: %s", search_query)
 
-        with DDGS() as ddgs:
-            results = list(ddgs.text(search_query, max_results=max_results))
+        results = list(DDGS().text(search_query, max_results=max_results))
 
         filtered = []
         for r in results:

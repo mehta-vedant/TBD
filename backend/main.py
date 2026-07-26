@@ -749,15 +749,16 @@ async def score_pre(
     # Validate doc_id
     doc = _get_doc_or_404(doc_id)
 
-    # Validate journal (skip for full_custom with custom_rules)
-    if not (mode == "full_custom" and custom_rules and custom_rules.strip()):
-        if journal.lower().strip() not in JOURNAL_MAP:
-            raise HTTPException(status_code=422, detail={
-                "success": False,
-                "error": f"Unsupported journal '{journal}'.",
-                "supported_journals": get_supported_journals(),
-                "step": "validation",
-            })
+    # Validate journal — skip for full_custom with custom_rules
+    # load_rules() handles its own fallback chain (built-in → extracted → web discovery)
+    if mode == "full_custom" and custom_rules and custom_rules.strip():
+        pass  # custom rules provided, skip journal validation
+    elif not journal or not journal.strip():
+        raise HTTPException(status_code=422, detail={
+            "success": False,
+            "error": "Journal name is required.",
+            "step": "validation",
+        })
 
     # Validate mode
     if mode not in ("standard", "semi_custom", "full_custom"):
@@ -816,14 +817,13 @@ async def get_journal_defaults(journal: str) -> JSONResponse:
     for a given journal style. Used by the Semi Custom panel to
     show placeholders/defaults.
     """
-    if journal.lower().strip() not in JOURNAL_MAP:
+    try:
+        rules = load_rules(journal)
+    except Exception as e:
         raise HTTPException(status_code=422, detail={
             "success": False,
-            "error": f"Unsupported journal '{journal}'.",
-            "supported_journals": get_supported_journals(),
+            "error": f"Could not load rules for '{journal}': {e}",
         })
-
-    rules = load_rules(journal)
     
     def get_nested(d, path):
         keys = path.split(".")
@@ -946,15 +946,15 @@ async def format_document(
             "step": "validation",
         })
 
-    # ── Validate journal (skip for full_custom with custom_rules) ────────
-    if not (mode == "full_custom" and custom_rules and custom_rules.strip()):
-        if journal.lower().strip() not in JOURNAL_MAP:
-            raise HTTPException(status_code=422, detail={
-                "success": False,
-                "error": f"Unsupported journal '{journal}'.",
-                "supported_journals": get_supported_journals(),
-                "step": "validation",
-            })
+    # ── Validate journal — skip for full_custom with custom_rules ─────
+    if mode == "full_custom" and custom_rules and custom_rules.strip():
+        pass  # custom rules provided
+    elif not journal or not journal.strip():
+        raise HTTPException(status_code=422, detail={
+            "success": False,
+            "error": "Journal name is required.",
+            "step": "validation",
+        })
 
     # ── Validate mode ─────────────────────────────────────────────────────
     if mode not in ("standard", "semi_custom", "full_custom"):
@@ -1934,10 +1934,9 @@ async def pre_check_legacy(
             "success": False, "error": f"Unsupported file type '.{ext}'.", "step": "validation",
         })
 
-    if journal.lower().strip() not in JOURNAL_MAP:
+    if not journal or not journal.strip():
         raise HTTPException(status_code=422, detail={
-            "success": False, "error": f"Unsupported journal '{journal}'.",
-            "supported_journals": get_supported_journals(), "step": "validation",
+            "success": False, "error": "Journal name is required.", "step": "validation",
         })
 
     content = await file.read()
