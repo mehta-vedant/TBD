@@ -16,7 +16,8 @@ from dotenv import load_dotenv
 
 from tools.logger import get_logger
 
-load_dotenv()
+_backend_dir = Path(__file__).resolve().parent.parent
+load_dotenv(_backend_dir / ".env")
 logger = get_logger(__name__)
 
 RULES_DIR = Path(__file__).resolve().parent.parent / "rules"
