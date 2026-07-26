@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -1973,3 +1974,117 @@ async def pre_check_legacy(
 async def get_job_status_legacy(job_id: str) -> JSONResponse:
     """Legacy status endpoint. Redirects to /format/status/{job_id}."""
     return await get_format_status(job_id)
+
+
+# ---------------------------------------------------------------------------
+# Journal Search & Discovery Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/journals/search")
+async def search_journals(q: str = "") -> JSONResponse:
+    """
+    Search for journals by name. Returns built-in journals that match,
+    plus web search results for unknown journals.
+    """
+    if not q.strip():
+        return JSONResponse({
+            "success": True,
+            "results": [],
+            "built_in": get_supported_journals(),
+        })
+
+    query = q.strip()
+    key = query.lower()
+
+    # Check built-in journals first
+    built_in_hits = []
+    for name in get_supported_journals():
+        if key in name.lower() or name.lower() in key:
+            built_in_hits.append({
+                "title": name,
+                "source": "built-in",
+                "slug": name.lower().replace(" ", "-"),
+            })
+
+    # Search the web for additional results
+    web_hits = []
+    try:
+        from tools.journal_discovery import search_journal
+        results = search_journal(query, max_results=5)
+        for r in results:
+            title = r.get("title", "")
+            url = r.get("url", "")
+            snippet = r.get("snippet", "")
+            # Skip if it's already a built-in result
+            if any(h["title"].lower() in title.lower() for h in built_in_hits):
+                continue
+            web_hits.append({
+                "title": title,
+                "url": url,
+                "snippet": snippet[:200],
+                "source": "web",
+                "slug": re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")[:60],
+            })
+    except Exception as e:
+        logger.warning("[JOURNALS] Web search failed: %s", e)
+
+    return JSONResponse({
+        "success": True,
+        "results": built_in_hits + web_hits,
+    })
+
+
+@app.post("/journals/extract")
+async def extract_journal_rules(request: Request) -> JSONResponse:
+    """
+    Extract rules for a journal. If url is provided, fetches from that URL.
+    Otherwise, searches the web for the journal's guidelines.
+    """
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+
+    journal_name = body.get("name", "").strip()
+    url = body.get("url", "").strip() or None
+
+    if not journal_name:
+        raise HTTPException(status_code=400, detail={"error": "Journal name is required"})
+
+    # Check if already extracted
+    from tools.journal_discovery import _read_cache
+    cached = _read_cache(journal_name)
+    if cached:
+        return JSONResponse({
+            "success": True,
+            "status": "cached",
+            "rules": cached,
+        })
+
+    # Run discovery
+    try:
+        from tools.journal_discovery import discover_journal
+        rules = await asyncio.get_event_loop().run_in_executor(
+            None, lambda: discover_journal(journal_name, url)
+        )
+        return JSONResponse({
+            "success": True,
+            "status": "extracted",
+            "rules": rules,
+        })
+    except Exception as e:
+        logger.warning("[JOURNALS] Extraction failed for '%s': %s", journal_name, e)
+        raise HTTPException(status_code=422, detail={
+            "error": f"Could not extract rules for '{journal_name}': {e}",
+        })
+
+
+@app.get("/journals/extracted")
+async def list_extracted_journals() -> JSONResponse:
+    """List all previously extracted/cached journals."""
+    from tools.journal_discovery import list_extracted_journals
+    journals = list_extracted_journals()
+    return JSONResponse({
+        "success": True,
+        "journals": journals,
+    })
