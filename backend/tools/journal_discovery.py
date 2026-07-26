@@ -108,7 +108,10 @@ def fetch_journal_page(url: str) -> str:
     try:
         logger.info("[DISCOVERY] Fetching URL: %s", url)
         headers = {
-            "User-Agent": "Mozilla/5.0 (academic research tool; citation formatting)"
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Encoding": "gzip, deflate, br",
         }
         resp = httpx.get(url, headers=headers, timeout=20, follow_redirects=True)
         resp.raise_for_status()
@@ -129,8 +132,27 @@ def fetch_journal_page(url: str) -> str:
         return result
 
     except Exception as e:
-        logger.warning("[DISCOVERY] Fetch failed for %s: %s", url, e)
-        return ""
+        logger.warning("[DISCOVERY] Direct fetch failed for %s: %s — trying Jina Reader fallback", url, e)
+        # Fallback: use Jina Reader API (bypasses most bot detection)
+        try:
+            jina_url = f"https://r.jina.ai/{url}"
+            jina_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+                "Accept": "text/plain",
+            }
+            resp2 = httpx.get(jina_url, headers=jina_headers, timeout=30, follow_redirects=True)
+            resp2.raise_for_status()
+            text = resp2.text
+            text = re.sub(r"\n{3,}", "\n\n", text)
+            truncated = len(text) > _MAX_FETCH_CHARS
+            result = text[:_MAX_FETCH_CHARS]
+            if truncated:
+                result += f"\n\n[... TRUNCATED at {_MAX_FETCH_CHARS} chars ...]"
+            logger.info("[DISCOVERY] Jina fallback fetched %d chars", len(result))
+            return result
+        except Exception as e2:
+            logger.warning("[DISCOVERY] Jina fallback also failed for %s: %s", url, e2)
+            return ""
 
 
 # ---------------------------------------------------------------------------
