@@ -1,25 +1,162 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+const POPULAR_JOURNALS = [
+  'APA 7th Edition',
+  'IEEE',
+  'Vancouver',
+  'Springer',
+  'Chicago',
+  'Nature',
+  'Science',
+  'Cell',
+  'The Lancet',
+  'NEJM',
+  'PNAS',
+  'PLOS ONE',
+  'Nature Medicine',
+  'Nature Biotechnology',
+  'Nature Communications',
+  'JAMA',
+  'BMJ',
+  'ACS Nano',
+  'Advanced Materials',
+  'Angewandte Chemie',
+  'Chemical Reviews',
+  'Environmental Science & Technology',
+  'Journal of the American Chemical Society',
+  'Physical Review Letters',
+  'Applied Physics Letters',
+  'Journal of Biological Chemistry',
+  'Molecular Cell',
+  'Neuron',
+  'Immunity',
+  'Cancer Research',
+  'The Astrophysical Journal',
+  'Monthly Notices of the Royal Astronomical Society',
+  'Economics Letters',
+  'Quarterly Journal of Economics',
+  'American Economic Review',
+  'Political Analysis',
+  'Journal of Political Economy',
+  'ACM Computing Surveys',
+  'IEEE Transactions on Pattern Analysis',
+  'Neural Computation',
+  'Artificial Intelligence',
+  'Journal of Machine Learning Research',
+  'Computer Networks',
+  'Information Sciences',
+  'Software Engineering Notes',
+  'IEEE Access',
+  'MDPI',
+  'Elsevier',
+  'Taylor & Francis',
+  'Wiley',
+  'SAGE',
+  'Oxford Academic',
+  'Cambridge University Press',
+  'PLoS Biology',
+  'PLoS Genetics',
+  'PLoS Computational Biology',
+  'eLife',
+  'PeerJ',
+  'Scientific Reports',
+  'Frontiers in Immunology',
+  'Frontiers in Neuroscience',
+  'BMC Genomics',
+  'Genome Biology',
+  'Nucleic Acids Research',
+  'Bioinformatics',
+  'Genetics',
+  'Plant Cell',
+  'Plant Physiology',
+  'Marine Ecology Progress Series',
+  'Ecology Letters',
+  'Global Change Biology',
+  'Conservation Biology',
+  'Journal of Ecology',
+  'Oikos',
+  'Animal Behaviour',
+  'Behavioral Ecology',
+  'Proceedings of the Royal Society B',
+  'Philosophical Transactions of the Royal Society',
+  'Mind',
+  'The Journal of Philosophy',
+  'Ethics',
+  'Noûs',
+  'Philosophy and Phenomenological Research',
+  'Legal Studies',
+  'Harvard Law Review',
+  'Yale Law Journal',
+  'Stanford Law Review',
+  'Columbia Law Review',
+  'Journal of International Economics',
+  'World Development',
+  'Journal of Development Economics',
+  'American Journal of Political Science',
+  'Comparative Political Studies',
+  'Journal of Conflict Resolution',
+  'International Organization',
+  'Journal of Marriage and Family',
+  'Demography',
+  'Social Forces',
+  'Criminology',
+  'Journal of Research in Crime and Delinquency',
+  'Journal of Abnormal Psychology',
+  'Health Psychology',
+  'Annals of Behavioral Medicine',
+  'Journal of Consulting and Clinical Psychology',
+  'Academic Medicine',
+  'Medical Education',
+  'BMC Medical Education',
+  'Radiology',
+  'Journal of Nuclear Medicine',
+  'Anesthesiology',
+  'Anesthesia & Analgesia',
+  'British Journal of Anaesthesia',
+  'Critical Care Medicine',
+  'Chest',
+  'Heart',
+  'Circulation',
+  'Hypertension',
+  'Diabetes Care',
+  'The Journal of Clinical Endocrinology & Metabolism',
+  'Gastroenterology',
+  'Hepatology',
+  'Journal of Hepatology',
+  'Kidney International',
+  'Journal of the American Society of Nephrology',
+  'Arthritis & Rheumatology',
+  'Annals of the Rheumatic Diseases',
+  'Journal of Allergy and Clinical Immunology',
+  'Blood',
+  'Leukemia',
+  'Journal of Clinical Oncology',
+  'Cancer',
+  'Neurology',
+  'Brain',
+  'The Lancet Neurology',
+  'Annals of Neurology',
+  'Stroke',
+  'Journal of Cerebral Blood Flow & Metabolism',
+  'Schizophrenia Bulletin',
+  'Bipolar Disorders',
+  'Journal of Psychiatric Research',
+  'Addiction',
+  'Journal of Studies on Alcohol and Drugs',
+]
+
 const SearchIcon = () => (
-  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
     <circle cx="11" cy="11" r="8" />
     <line x1="21" y1="21" x2="16.65" y2="16.65" />
   </svg>
 )
 
 const CheckIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
     <path d="M20 6L9 17l-5-5" />
-  </svg>
-)
-
-const GlobeIcon = () => (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-    <circle cx="12" cy="12" r="10" />
-    <line x1="2" y1="12" x2="22" y2="12" />
-    <path d="M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z" />
   </svg>
 )
 
@@ -31,117 +168,116 @@ const SpinnerIcon = () => (
 
 export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
   const [query, setQuery] = useState('')
-  const [results, setResults] = useState([])
-  const [loading, setLoading] = useState(false)
-  const [showDropdown, setShowDropdown] = useState(false)
+  const [focused, setFocused] = useState(false)
   const [extracting, setExtracting] = useState(null)
-  const debounceRef = useRef(null)
+  const [highlightIdx, setHighlightIdx] = useState(-1)
+  const inputRef = useRef(null)
   const wrapperRef = useRef(null)
+
+  const filtered = useMemo(() => {
+    if (!query.trim()) return []
+    const q = query.toLowerCase()
+    return POPULAR_JOURNALS.filter(j => j.toLowerCase().includes(q)).slice(0, 8)
+  }, [query])
+
+  const showDropdown = focused && query.trim().length > 0
 
   useEffect(() => {
     const handleClickOutside = (e) => {
       if (wrapperRef.current && !wrapperRef.current.contains(e.target)) {
-        setShowDropdown(false)
+        setFocused(false)
       }
     }
     document.addEventListener('mousedown', handleClickOutside)
     return () => document.removeEventListener('mousedown', handleClickOutside)
   }, [])
 
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-
-    if (!query.trim() || query.trim().length < 2) {
-      setResults([])
-      setShowDropdown(false)
-      return
+  const handleKeyDown = async (e) => {
+    if (e.key === 'Enter') {
+      if (highlightIdx >= 0 && filtered[highlightIdx]) {
+        handlePick(filtered[highlightIdx])
+      } else if (query.trim().length >= 2) {
+        await handleDiscover(query.trim())
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      setHighlightIdx(i => Math.min(i + 1, filtered.length - 1))
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      setHighlightIdx(i => Math.max(i - 1, -1))
+    } else if (e.key === 'Escape') {
+      setFocused(false)
     }
+  }
 
-    debounceRef.current = setTimeout(() => {
-      searchJournals(query.trim())
-    }, 300)
+  const handlePick = (name) => {
+    setQuery(name)
+    setFocused(false)
+    onSelect(name, 'built-in')
+  }
 
-    return () => { if (debounceRef.current) clearTimeout(debounceRef.current) }
-  }, [query])
-
-  const searchJournals = async (q) => {
-    setLoading(true)
-    setShowDropdown(true)
+  const handleDiscover = async (name) => {
+    setExtracting(name)
+    setFocused(false)
     try {
-      const res = await fetch(`${API_BASE}/journals/search?q=${encodeURIComponent(q)}`)
+      const res = await fetch(`${API_BASE}/journals/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
       const data = await res.json()
       if (data.success) {
-        setResults(data.results)
+        setQuery(name)
+        onSelect(name, 'extracted')
+      } else {
+        alert(`Could not find rules for "${name}". Try a more specific journal name or use Full Custom.`)
       }
     } catch (err) {
-      console.error('Journal search failed:', err)
-      setResults([])
+      alert('Discovery failed. Please try again or use Full Custom mode.')
     } finally {
-      setLoading(false)
+      setExtracting(null)
     }
   }
 
-  const handleSelect = async (item) => {
-    if (item.source === 'built-in') {
-      onSelect(item.title, 'built-in')
-      setQuery(item.title)
-      setShowDropdown(false)
-    } else {
-      setExtracting(item.title)
-      setShowDropdown(false)
-      try {
-        const res = await fetch(`${API_BASE}/journals/extract`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ name: item.title, url: item.url }),
-        })
-        const data = await res.json()
-        if (data.success) {
-          onSelect(item.title, 'extracted')
-          setQuery(item.title)
-        } else {
-          alert(data.error || 'Failed to extract rules. Try uploading a guidelines PDF instead.')
-        }
-      } catch (err) {
-        console.error('Extraction failed:', err)
-        alert('Extraction failed. Try uploading a guidelines PDF instead.')
-      } finally {
-        setExtracting(null)
-      }
-    }
-  }
-
-  const builtInResults = results.filter(r => r.source === 'built-in')
-  const webResults = results.filter(r => r.source === 'web')
+  const isBuiltin = selectedJournal && POPULAR_JOURNALS.some(j => j === selectedJournal)
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative' }}>
+      {/* Search input */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
         background: 'var(--bg-soft)', border: '1.5px solid var(--bg-soft)',
         borderRadius: 'var(--radius-sm)', padding: '10px 14px',
         transition: 'border-color 0.2s',
-        ...(showDropdown ? { borderColor: 'var(--blue)' } : {}),
+        borderColor: focused ? 'var(--blue)' : 'var(--bg-soft)',
       }}>
-        <span style={{ color: 'var(--text-secondary)', flexShrink: 0 }}><SearchIcon /></span>
+        <span style={{ color: 'var(--text-secondary)', flexShrink: 0, display: 'flex' }}><SearchIcon /></span>
         <input
+          ref={inputRef}
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onFocus={() => results.length > 0 && setShowDropdown(true)}
-          placeholder="Search for any journal (e.g. Nature, Cell, PLOS ONE...)"
-          disabled={disabled}
+          onChange={(e) => { setQuery(e.target.value); setHighlightIdx(-1) }}
+          onFocus={() => setFocused(true)}
+          onKeyDown={handleKeyDown}
+          placeholder={selectedJournal ? selectedJournal : 'Search journal (e.g. Nature, Cell, PLOS ONE...)'}
+          disabled={disabled || extracting !== null}
           style={{
             flex: 1, background: 'none', border: 'none', outline: 'none',
             color: 'var(--text)', fontSize: '0.9rem', padding: 0,
           }}
         />
-        {loading && <SpinnerIcon />}
-        {selectedJournal && !loading && (
+        {extracting && (
+          <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '0.75rem', color: 'var(--blue)' }}>
+            <SpinnerIcon />
+            Discovering...
+          </span>
+        )}
+        {!extracting && selectedJournal && (
           <span style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem', fontWeight: 600,
-            background: 'rgba(34,197,94,0.15)', color: 'var(--success)',
+            display: 'flex', alignItems: 'center', gap: 4, padding: '2px 8px',
+            borderRadius: 12, fontSize: '0.7rem', fontWeight: 600,
+            background: isBuiltin ? 'rgba(34,197,94,0.15)' : 'rgba(168,85,247,0.15)',
+            color: isBuiltin ? 'var(--success)' : '#a855f7',
           }}>
             <CheckIcon />
             {selectedJournal}
@@ -149,104 +285,47 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
         )}
       </div>
 
-      {/* Dropdown */}
-      {showDropdown && (
+      {/* Dropdown suggestions */}
+      {showDropdown && !extracting && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
           background: 'var(--bg-card)', border: '1.5px solid var(--bg-soft)',
-          borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,0,0,0.2)',
-          maxHeight: 320, overflowY: 'auto', zIndex: 100,
+          borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          zIndex: 100, overflow: 'hidden',
         }}>
-          {builtInResults.length === 0 && webResults.length === 0 && !loading && (
-            <div style={{ padding: '16px 14px', color: 'var(--text-secondary)', fontSize: '0.85rem', textAlign: 'center' }}>
-              No results found. Try a different search term.
-            </div>
-          )}
+          {filtered.length > 0 && filtered.map((name, i) => (
+            <button
+              key={name}
+              onClick={() => handlePick(name)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '9px 14px', background: i === highlightIdx ? 'var(--bg-soft)' : 'none',
+                border: 'none', cursor: 'pointer', textAlign: 'left',
+                fontSize: '0.85rem', color: 'var(--text)',
+                transition: 'background 0.1s',
+              }}
+              onMouseEnter={() => setHighlightIdx(i)}
+            >
+              <span style={{ fontWeight: 600, flex: 1 }}>{name}</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>select</span>
+            </button>
+          ))}
 
-          {builtInResults.length > 0 && (
-            <div>
-              <div style={{
-                padding: '8px 14px', fontSize: '0.7rem', fontWeight: 700,
-                color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em',
-              }}>
-                Built-in Styles
-              </div>
-              {builtInResults.map((item, i) => (
-                <button
-                  key={`built-${i}`}
-                  onClick={() => handleSelect(item)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '10px 14px', background: 'none', border: 'none',
-                    cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-soft)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                >
-                  <span style={{
-                    width: 22, height: 22, borderRadius: '50%',
-                    background: 'rgba(34,197,94,0.15)', color: 'var(--success)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    <CheckIcon />
-                  </span>
-                  <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)' }}>
-                    {item.title}
-                  </span>
-                  <span style={{ marginLeft: 'auto', fontSize: '0.7rem', color: 'var(--text-secondary)' }}>
-                    Instant
-                  </span>
-                </button>
-              ))}
-            </div>
-          )}
-
-          {webResults.length > 0 && (
-            <div>
-              <div style={{
-                padding: '8px 14px', fontSize: '0.7rem', fontWeight: 700,
-                color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em',
-                borderTop: builtInResults.length > 0 ? '1px solid var(--bg-soft)' : 'none',
-              }}>
-                Web Results
-              </div>
-              {webResults.map((item, i) => (
-                <button
-                  key={`web-${i}`}
-                  onClick={() => handleSelect(item)}
-                  disabled={extracting !== null}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                    padding: '10px 14px', background: 'none', border: 'none',
-                    cursor: extracting ? 'wait' : 'pointer', textAlign: 'left', transition: 'background 0.15s',
-                  }}
-                  onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-soft)'}
-                  onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-                >
-                  <span style={{
-                    width: 22, height: 22, borderRadius: '50%',
-                    background: extracting === item.title ? 'rgba(59,130,246,0.15)' : 'rgba(168,85,247,0.15)',
-                    color: extracting === item.title ? 'var(--blue)' : '#a855f7',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                  }}>
-                    {extracting === item.title ? <SpinnerIcon /> : <GlobeIcon />}
-                  </span>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {item.title}
-                    </div>
-                    {item.snippet && (
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {item.snippet.slice(0, 100)}
-                      </div>
-                    )}
-                  </div>
-                  <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', flexShrink: 0 }}>
-                    {extracting === item.title ? 'Extracting...' : 'Auto-extract'}
-                  </span>
-                </button>
-              ))}
-            </div>
+          {/* Custom name option */}
+          {query.trim().length >= 2 && !POPULAR_JOURNALS.some(j => j.toLowerCase() === query.toLowerCase()) && (
+            <button
+              onClick={() => handleDiscover(query.trim())}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
+                padding: '9px 14px', background: 'none', border: 'none',
+                borderTop: filtered.length > 0 ? '1px solid var(--bg-soft)' : 'none',
+                cursor: 'pointer', textAlign: 'left',
+                fontSize: '0.85rem', color: 'var(--blue)',
+              }}
+            >
+              <span>Discover rules for "{query.trim()}"</span>
+              <span style={{ marginLeft: 'auto', fontSize: '0.7rem', opacity: 0.6 }}>Enter ↵</span>
+            </button>
           )}
         </div>
       )}

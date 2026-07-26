@@ -999,17 +999,16 @@ export default function App() {
                     setSelectedMode('full_custom')
                   }}
                   style={{
-                    marginTop: 10, width: '100%', padding: '10px 14px',
-                    background: journal === 'Custom' ? 'rgba(239,68,68,0.08)' : 'transparent',
-                    border: journal === 'Custom' ? '1.5px solid var(--error)' : '1.5px dashed var(--bg-soft)',
-                    borderRadius: 'var(--radius-sm)', cursor: 'pointer',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    transition: 'all 0.2s', fontSize: '0.85rem',
-                    color: journal === 'Custom' ? 'var(--error)' : 'var(--text-secondary)',
+                    marginTop: 10, width: '100%', padding: '8px 14px',
+                    background: 'transparent',
+                    border: '1px dashed var(--bg-soft)', borderRadius: 'var(--radius-sm)',
+                    cursor: 'pointer', fontSize: '0.8rem', color: 'var(--text-secondary)',
+                    transition: 'all 0.2s',
                   }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--text-secondary)'; e.currentTarget.style.color = 'var(--text)' }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--bg-soft)'; e.currentTarget.style.color = 'var(--text-secondary)' }}
                 >
-                  <span style={{ fontSize: '1rem', fontWeight: 700 }}>+</span>
-                  Full Custom — upload your own guidelines PDF
+                  Or upload your own guidelines PDF (Full Custom)
                 </button>
               </div>
 
