@@ -210,20 +210,33 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
     }
   }
 
+  const BUILTIN_JOURNALS = ['APA 7th Edition', 'IEEE', 'Vancouver', 'Springer', 'Chicago']
+
   const handlePick = (name) => {
     setQuery(name)
     setFocused(false)
     onSelect(name, 'built-in')
+    // Warm cache in background for non-built-in curated journals
+    if (!BUILTIN_JOURNALS.includes(name)) {
+      fetch(`${API_BASE}/journals/extract`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      }).catch(() => {})
+    }
   }
 
   const handleDiscover = async (name) => {
     setExtracting(name)
     setFocused(false)
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), 90000)
     try {
       const res = await fetch(`${API_BASE}/journals/extract`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
+        signal: controller.signal,
       })
       const data = await res.json()
       if (data.success) {
@@ -233,8 +246,13 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
         alert(`Could not find rules for "${name}". Try a more specific journal name or use Full Custom.`)
       }
     } catch (err) {
-      alert('Discovery failed. Please try again or use Full Custom mode.')
+      if (err.name === 'AbortError') {
+        alert('Extraction took too long. Please try again or use Full Custom mode.')
+      } else {
+        alert('Discovery failed. Please try again or use Full Custom mode.')
+      }
     } finally {
+      clearTimeout(timer)
       setExtracting(null)
     }
   }

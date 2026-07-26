@@ -715,7 +715,7 @@ export default function App() {
       }
       const res = await axios.post(`${API}/score/pre`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 30000,
+        timeout: 120000,
       })
       setTrustScore(res.data.pre_format_score)
     } catch (err) {
@@ -744,7 +744,7 @@ export default function App() {
 
       const res = await axios.post(`${API}/format`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
-        timeout: 30000,
+        timeout: 120000,
       })
 
       setJobId(res.data.job_id)
