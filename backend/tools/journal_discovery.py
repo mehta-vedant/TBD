@@ -25,7 +25,7 @@ EXTRACTED_DIR = RULES_DIR / "extracted"
 EXTRACTED_DIR.mkdir(exist_ok=True)
 
 _NOISE_TAGS = ["script", "style", "nav", "footer", "header", "aside", "iframe"]
-_MAX_FETCH_CHARS = 12_000
+_MAX_FETCH_CHARS = 20_000
 
 _GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
 
@@ -103,15 +103,41 @@ def search_journal(query: str, max_results: int = 5) -> list[dict]:
 def fetch_journal_page(url: str) -> str:
     """
     Fetch a URL and return cleaned plain text suitable for LLM analysis.
+    Uses Jina Reader as primary (clean markdown, bypasses bot detection).
+    Falls back to direct httpx if Jina fails.
     Returns empty string on failure.
     """
+    # --- Primary: Jina Reader ---
     try:
-        logger.info("[DISCOVERY] Fetching URL: %s", url)
+        logger.info("[DISCOVERY] Fetching via Jina Reader: %s", url)
+        jina_headers = {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+            "Accept": "text/plain",
+        }
+        resp = httpx.get(f"https://r.jina.ai/{url}", headers=jina_headers, timeout=30, follow_redirects=True)
+        resp.raise_for_status()
+
+        text = resp.text
+        text = re.sub(r"\n{3,}", "\n\n", text)
+
+        truncated = len(text) > _MAX_FETCH_CHARS
+        result = text[:_MAX_FETCH_CHARS]
+        if truncated:
+            result += f"\n\n[... TRUNCATED at {_MAX_FETCH_CHARS} chars ...]"
+
+        logger.info("[DISCOVERY] Jina fetched %d chars (truncated=%s)", len(result), truncated)
+        return result
+
+    except Exception as e:
+        logger.warning("[DISCOVERY] Jina failed for %s: %s — falling back to direct fetch", url, e)
+
+    # --- Fallback: direct httpx + BeautifulSoup ---
+    try:
+        logger.info("[DISCOVERY] Fetching via direct httpx: %s", url)
         headers = {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
             "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
         }
         resp = httpx.get(url, headers=headers, timeout=20, follow_redirects=True)
         resp.raise_for_status()
@@ -128,31 +154,12 @@ def fetch_journal_page(url: str) -> str:
         if truncated:
             result += f"\n\n[... TRUNCATED at {_MAX_FETCH_CHARS} chars ...]"
 
-        logger.info("[DISCOVERY] Fetched %d chars (truncated=%s)", len(result), truncated)
+        logger.info("[DISCOVERY] Direct fetch got %d chars (truncated=%s)", len(result), truncated)
         return result
 
-    except Exception as e:
-        logger.warning("[DISCOVERY] Direct fetch failed for %s: %s — trying Jina Reader fallback", url, e)
-        # Fallback: use Jina Reader API (bypasses most bot detection)
-        try:
-            jina_url = f"https://r.jina.ai/{url}"
-            jina_headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-                "Accept": "text/plain",
-            }
-            resp2 = httpx.get(jina_url, headers=jina_headers, timeout=30, follow_redirects=True)
-            resp2.raise_for_status()
-            text = resp2.text
-            text = re.sub(r"\n{3,}", "\n\n", text)
-            truncated = len(text) > _MAX_FETCH_CHARS
-            result = text[:_MAX_FETCH_CHARS]
-            if truncated:
-                result += f"\n\n[... TRUNCATED at {_MAX_FETCH_CHARS} chars ...]"
-            logger.info("[DISCOVERY] Jina fallback fetched %d chars", len(result))
-            return result
-        except Exception as e2:
-            logger.warning("[DISCOVERY] Jina fallback also failed for %s: %s", url, e2)
-            return ""
+    except Exception as e2:
+        logger.warning("[DISCOVERY] Direct fetch also failed for %s: %s", url, e2)
+        return ""
 
 
 # ---------------------------------------------------------------------------
