@@ -986,7 +986,7 @@ export default function App() {
                 <JournalSearch
                   onSelect={(journalName, source) => {
                     setJournal(journalName)
-                    setSelectedMode('semi_custom')
+                    setSelectedMode('standard')
                   }}
                   selectedJournal={journal && journal !== 'Custom' ? journal : null}
                   disabled={uploading}
@@ -1018,23 +1018,23 @@ export default function App() {
                   <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Formatting Mode</label>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
                     <button
+                      className={`yn-btn ${selectedMode === 'standard' ? 'selected' : ''}`}
+                      onClick={() => setSelectedMode('standard')}
+                      style={{ padding: '14px', textAlign: 'center' }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>Standard</div>
+                      <div style={{ fontSize: '0.7rem', color: selectedMode === 'standard' ? '#fff' : 'var(--text-secondary)' }}>
+                        We auto-fetch rules for {journal} and apply them
+                      </div>
+                    </button>
+                    <button
                       className={`yn-btn ${selectedMode === 'semi_custom' ? 'selected' : ''}`}
                       onClick={() => setSelectedMode('semi_custom')}
                       style={{ padding: '14px', textAlign: 'center' }}
                     >
                       <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>Semi Custom</div>
                       <div style={{ fontSize: '0.7rem', color: selectedMode === 'semi_custom' ? '#fff' : 'var(--text-secondary)' }}>
-                        Override specific rules
-                      </div>
-                    </button>
-                    <button
-                      className={`yn-btn ${selectedMode === 'full_custom' ? 'selected' : ''}`}
-                      onClick={() => setSelectedMode('full_custom')}
-                      style={{ padding: '14px', textAlign: 'center' }}
-                    >
-                      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>Guidelines</div>
-                      <div style={{ fontSize: '0.7rem', color: selectedMode === 'full_custom' ? '#fff' : 'var(--text-secondary)' }}>
-                        Upload your own guidelines PDF
+                        We fetch rules, you override specific fields
                       </div>
                     </button>
                   </div>
@@ -1045,17 +1045,6 @@ export default function App() {
                         journal={journal}
                         overrides={overrides}
                         onChange={setOverrides}
-                      />
-                    </div>
-                  )}
-
-                  {selectedMode === 'full_custom' && (
-                    <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px dashed var(--bg-soft)' }}>
-                      <GuidelinesUpload
-                        file={guidelineFile}
-                        setFile={setGuidelineFile}
-                        extracting={extracting}
-                        onExtract={handleFormat}
                       />
                     </div>
                   )}

@@ -290,8 +290,8 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
       {showDropdown && !extracting && (
         <div style={{
           position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
-          background: 'var(--bg-card)', border: '1.5px solid var(--bg-soft)',
-          borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,0,0,0.25)',
+          background: '#fff', border: '1.5px solid var(--border)',
+          borderRadius: 'var(--radius-sm)', boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
           zIndex: 100, overflow: 'hidden',
         }}>
           {filtered.length > 0 && filtered.map((name, i) => (
@@ -300,26 +300,25 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
               onClick={() => handlePick(name)}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '9px 14px', background: i === highlightIdx ? 'var(--bg-soft)' : 'none',
+                padding: '10px 14px', background: i === highlightIdx ? 'var(--bg-soft)' : '#fff',
                 border: 'none', cursor: 'pointer', textAlign: 'left',
-                fontSize: '0.85rem', color: 'var(--text)',
+                fontSize: '0.85rem', color: 'var(--text)', borderBottom: '1px solid var(--border)',
                 transition: 'background 0.1s',
               }}
               onMouseEnter={() => setHighlightIdx(i)}
             >
               <span style={{ fontWeight: 600, flex: 1 }}>{name}</span>
-              <span style={{ fontSize: '0.7rem', color: 'var(--text-secondary)' }}>select</span>
+              <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>select</span>
             </button>
           ))}
 
-          {/* Custom name option */}
+          {/* Discover option for unknown journals */}
           {query.trim().length >= 2 && !POPULAR_JOURNALS.some(j => j.toLowerCase() === query.toLowerCase()) && (
             <button
               onClick={() => handleDiscover(query.trim())}
               style={{
                 display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '9px 14px', background: 'none', border: 'none',
-                borderTop: filtered.length > 0 ? '1px solid var(--bg-soft)' : 'none',
+                padding: '10px 14px', background: '#fff', border: 'none',
                 cursor: 'pointer', textAlign: 'left',
                 fontSize: '0.85rem', color: 'var(--blue)',
               }}
