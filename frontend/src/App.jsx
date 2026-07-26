@@ -5,6 +5,7 @@ import ProgressScreen from './components/ProgressScreen'
 import ResultsScreen from './components/ResultsScreen'
 import SemiCustomPanel from './components/SemiCustomPanel'
 import GuidelinesUpload from './components/GuidelinesUpload'
+import JournalSearch from './components/JournalSearch'
 
 // Prevent browser from restoring scroll position on refresh
 if (typeof window !== 'undefined') {
@@ -504,16 +505,6 @@ function Landing({ onGetStarted }) {
 
 
 
-// ─── Journal metadata ─────────────────────────────────────────
-const JOURNAL_META = [
-  { id: 'IEEE', label: 'IEEE', updated: 'Mar 2024' },
-  { id: 'APA 7th Edition', label: 'APA 7th Edition', updated: 'Jan 2024' },
-  { id: 'Springer', label: 'Springer', updated: 'Feb 2024' },
-  { id: 'Vancouver', label: 'Vancouver', updated: 'Feb 2024' },
-  { id: 'Chicago', label: 'Chicago', updated: 'Feb 2024' },
-  { id: 'Custom', label: 'Custom', updated: 'Full Customization' },
-]
-
 // ─── Main App ──────────────────────────────────────────
 export default function App() {
   // View state
@@ -946,7 +937,6 @@ export default function App() {
               <Upload
                 file={file} setFile={handleFileSelect}
                 journal={journal} setJournal={setJournal}
-                journals={JOURNAL_META.map(j => j.id)}
                 onSubmit={handlePreCheck}
                 hideJournalSelect
               />
@@ -993,96 +983,78 @@ export default function App() {
               {/* Step 2: Journal Selection */}
               <div className="step-box">
                 <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Select Journal Style</label>
-                <div className="journal-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-                  {JOURNAL_META.map(j => (
-                    <label
-                      key={j.id}
-                      className={`journal-card-row ${journal === j.id ? 'selected' : ''}`}
-                      style={{
-                        border: '1.5px solid var(--bg-soft)',
-                        padding: '12px',
-                        borderRadius: 'var(--radius-sm)',
-                        cursor: 'pointer',
-                        background: journal === j.id ? 'var(--blue-alpha)' : 'transparent',
-                        borderColor: journal === j.id ? 'var(--blue)' : 'var(--bg-soft)',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        transition: 'all 0.2s ease',
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <input
-                          type="radio" name="journal" value={j.id}
-                          checked={journal === j.id}
-                          style={{ accentColor: 'var(--blue)' }}
-                          onChange={() => {
-                            setJournal(j.id)
-                            if (j.id === 'Custom') {
-                              setSelectedMode('full_custom')
-                            } else {
-                              setSelectedMode('standard')
-                            }
-                          }}
-                        />
-                        <span style={{ fontWeight: 700, fontSize: '0.9rem' }}>{j.label}</span>
-                      </div>
-                      <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 4, marginLeft: 24 }}>
-                        {j.id === 'Custom' ? 'Extraction via Guidelines PDF' : `Ref: ${j.updated}`}
-                      </div>
-                    </label>
-                  ))}
-                </div>
+                <JournalSearch
+                  onSelect={(journalName, source) => {
+                    setJournal(journalName)
+                    if (journalName === 'Custom') {
+                      setSelectedMode('full_custom')
+                    } else {
+                      setSelectedMode('standard')
+                    }
+                  }}
+                  selectedJournal={journal}
+                  disabled={uploading}
+                />
               </div>
 
-              {/* Step 3: View-Specific Controls */}
-              {journal && (
-                journal === 'Custom' ? (
-                  /* FULL CUSTOM MODE */
-                  <div className="step-box animate-in">
-                    <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Upload Journal Guidelines (PDF)</label>
-                    <GuidelinesUpload
-                      file={guidelineFile}
-                      setFile={setGuidelineFile}
-                      extracting={extracting}
-                      onExtract={handleFormat}
-                    />
+              {/* Step 3: Formatting Mode Selection */}
+              {journal && journal !== 'Custom' && (
+                <div className="step-box animate-in">
+                  <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Formatting Mode</label>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                    {[
+                      { id: 'standard', label: 'Standard', desc: `Use defaults for ${journal}` },
+                      { id: 'semi_custom', label: 'Semi Custom', desc: `Override specific rules` },
+                      { id: 'full_custom', label: 'Full Custom', desc: `Upload your own guidelines PDF` },
+                    ].map(m => (
+                      <button
+                        key={m.id}
+                        className={`yn-btn ${selectedMode === m.id ? 'selected' : ''}`}
+                        onClick={() => setSelectedMode(m.id)}
+                        style={{ padding: '14px', textAlign: 'center' }}
+                      >
+                        <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>{m.label}</div>
+                        <div style={{ fontSize: '0.7rem', color: selectedMode === m.id ? '#fff' : 'var(--text-secondary)' }}>
+                          {m.desc}
+                        </div>
+                      </button>
+                    ))}
                   </div>
-                ) : (
-                  /* STANDARD / SEMI CUSTOM MODE */
-                  <div className="step-box animate-in">
-                    <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Formatting Mode</label>
-                    <div style={{ display: 'flex', gap: 12 }}>
-                      {['standard', 'semi_custom'].map(m => (
-                        <button
-                          key={m}
-                          className={`yn-btn ${selectedMode === m ? 'selected' : ''}`}
-                          onClick={() => setSelectedMode(m)}
-                          style={{ flex: 1, padding: '16px', textAlign: 'left' }}
-                        >
-                          <div style={{ fontWeight: 700, marginBottom: 4 }}>
-                            {m === 'standard' ? 'Standard' : 'Semi Custom'}
-                          </div>
-                          <div style={{ fontSize: '0.75rem', color: selectedMode === m ? '#fff' : 'var(--text-secondary)' }}>
-                            {m === 'standard'
-                              ? `Use defaults for ${journal}`
-                              : `Configure specific ${journal} rules`
-                            }
-                          </div>
-                        </button>
-                      ))}
-                    </div>
 
-                    {selectedMode === 'semi_custom' && (
-                      <div style={{ marginTop: 24, paddingTop: 24, borderTop: '1px dashed var(--bg-soft)' }}>
-                        <SemiCustomPanel
-                          journal={journal}
-                          overrides={overrides}
-                          onChange={setOverrides}
-                        />
-                      </div>
-                    )}
-                  </div>
-                )
+                  {selectedMode === 'semi_custom' && (
+                    <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px dashed var(--bg-soft)' }}>
+                      <SemiCustomPanel
+                        journal={journal}
+                        overrides={overrides}
+                        onChange={setOverrides}
+                      />
+                    </div>
+                  )}
+
+                  {selectedMode === 'full_custom' && (
+                    <div style={{ marginTop: 20, paddingTop: 20, borderTop: '1px dashed var(--bg-soft)' }}>
+                      <GuidelinesUpload
+                        file={guidelineFile}
+                        setFile={setGuidelineFile}
+                        extracting={extracting}
+                        onExtract={handleFormat}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Full Custom mode when Custom journal selected */}
+              {journal === 'Custom' && (
+                <div className="step-box animate-in">
+                  <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Upload Journal Guidelines (PDF)</label>
+                  <GuidelinesUpload
+                    file={guidelineFile}
+                    setFile={setGuidelineFile}
+                    extracting={extracting}
+                    onExtract={handleFormat}
+                  />
+                </div>
               )}
 
               {/* Submit */}
