@@ -986,18 +986,34 @@ export default function App() {
                 <JournalSearch
                   onSelect={(journalName, source) => {
                     setJournal(journalName)
-                    if (journalName === 'Custom') {
-                      setSelectedMode('full_custom')
-                    } else {
-                      setSelectedMode('standard')
-                    }
+                    setSelectedMode('standard')
                   }}
-                  selectedJournal={journal}
+                  selectedJournal={journal && journal !== 'Custom' ? journal : null}
                   disabled={uploading}
                 />
+
+                {/* Full Custom toggle — always visible below search */}
+                <button
+                  onClick={() => {
+                    setJournal('Custom')
+                    setSelectedMode('full_custom')
+                  }}
+                  style={{
+                    marginTop: 10, width: '100%', padding: '10px 14px',
+                    background: journal === 'Custom' ? 'rgba(239,68,68,0.08)' : 'transparent',
+                    border: journal === 'Custom' ? '1.5px solid var(--error)' : '1.5px dashed var(--bg-soft)',
+                    borderRadius: 'var(--radius-sm)', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    transition: 'all 0.2s', fontSize: '0.85rem',
+                    color: journal === 'Custom' ? 'var(--error)' : 'var(--text-secondary)',
+                  }}
+                >
+                  <span style={{ fontSize: '1rem', fontWeight: 700 }}>+</span>
+                  Full Custom — upload your own guidelines PDF
+                </button>
               </div>
 
-              {/* Step 3: Formatting Mode Selection */}
+              {/* Step 3: Mode Selection for non-Custom journals */}
               {journal && journal !== 'Custom' && (
                 <div className="step-box animate-in">
                   <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Formatting Mode</label>

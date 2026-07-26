@@ -111,15 +111,8 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
     }
   }
 
-  const handleCustomSelect = () => {
-    onSelect('Custom', 'custom')
-    setQuery('Custom (Upload Guidelines PDF)')
-    setShowDropdown(false)
-  }
-
   const builtInResults = results.filter(r => r.source === 'built-in')
   const webResults = results.filter(r => r.source === 'web')
-  const isCustomSelected = selectedJournal === 'Custom'
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative' }}>
@@ -148,11 +141,10 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
           <span style={{
             display: 'flex', alignItems: 'center', gap: 4,
             padding: '2px 8px', borderRadius: 12, fontSize: '0.7rem', fontWeight: 600,
-            background: isCustomSelected ? 'rgba(239,68,68,0.15)' : 'rgba(34,197,94,0.15)',
-            color: isCustomSelected ? 'var(--error)' : 'var(--success)',
+            background: 'rgba(34,197,94,0.15)', color: 'var(--success)',
           }}>
             <CheckIcon />
-            {isCustomSelected ? 'Custom' : selectedJournal}
+            {selectedJournal}
           </span>
         )}
       </div>
@@ -256,37 +248,6 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
               ))}
             </div>
           )}
-
-          {/* Custom option */}
-          <div style={{ borderTop: '1px solid var(--bg-soft)' }}>
-            <button
-              onClick={handleCustomSelect}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 10, width: '100%',
-                padding: '10px 14px', background: 'none', border: 'none',
-                cursor: 'pointer', textAlign: 'left', transition: 'background 0.15s',
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--bg-soft)'}
-              onMouseLeave={(e) => e.currentTarget.style.background = 'none'}
-            >
-              <span style={{
-                width: 22, height: 22, borderRadius: '50%',
-                background: 'rgba(239,68,68,0.15)', color: 'var(--error)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                fontSize: '0.8rem', fontWeight: 700,
-              }}>
-                +
-              </span>
-              <div style={{ flex: 1 }}>
-                <span style={{ fontWeight: 600, fontSize: '0.85rem', color: 'var(--text)' }}>
-                  Custom (Upload Guidelines PDF)
-                </span>
-                <div style={{ fontSize: '0.7rem', color: 'var(--text-secondary)', marginTop: 1 }}>
-                  Full Custom — upload your own guidelines
-                </div>
-              </div>
-            </button>
-          </div>
         </div>
       )}
     </div>
