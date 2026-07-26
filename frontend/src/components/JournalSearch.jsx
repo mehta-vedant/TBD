@@ -246,10 +246,11 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
       {/* Search input */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 8,
-        background: 'var(--bg-soft)', border: '1.5px solid var(--bg-soft)',
+        background: '#fff',
+        border: focused ? '1.5px solid var(--blue)' : '1.5px solid var(--border)',
         borderRadius: 'var(--radius-sm)', padding: '10px 14px',
-        transition: 'border-color 0.2s',
-        borderColor: focused ? 'var(--blue)' : 'var(--bg-soft)',
+        transition: 'border-color 0.2s, box-shadow 0.2s',
+        boxShadow: focused ? '0 0 0 3px rgba(37,99,235,0.1)' : 'none',
       }}>
         <span style={{ color: 'var(--text-secondary)', flexShrink: 0, display: 'flex' }}><SearchIcon /></span>
         <input

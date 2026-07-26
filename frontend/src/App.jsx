@@ -986,7 +986,7 @@ export default function App() {
                 <JournalSearch
                   onSelect={(journalName, source) => {
                     setJournal(journalName)
-                    setSelectedMode('standard')
+                    setSelectedMode('semi_custom')
                   }}
                   selectedJournal={journal && journal !== 'Custom' ? journal : null}
                   disabled={uploading}
@@ -1016,24 +1016,27 @@ export default function App() {
               {journal && journal !== 'Custom' && (
                 <div className="step-box animate-in">
                   <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Formatting Mode</label>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                    {[
-                      { id: 'standard', label: 'Standard', desc: `Use defaults for ${journal}` },
-                      { id: 'semi_custom', label: 'Semi Custom', desc: `Override specific rules` },
-                      { id: 'full_custom', label: 'Full Custom', desc: `Upload your own guidelines PDF` },
-                    ].map(m => (
-                      <button
-                        key={m.id}
-                        className={`yn-btn ${selectedMode === m.id ? 'selected' : ''}`}
-                        onClick={() => setSelectedMode(m.id)}
-                        style={{ padding: '14px', textAlign: 'center' }}
-                      >
-                        <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>{m.label}</div>
-                        <div style={{ fontSize: '0.7rem', color: selectedMode === m.id ? '#fff' : 'var(--text-secondary)' }}>
-                          {m.desc}
-                        </div>
-                      </button>
-                    ))}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+                    <button
+                      className={`yn-btn ${selectedMode === 'semi_custom' ? 'selected' : ''}`}
+                      onClick={() => setSelectedMode('semi_custom')}
+                      style={{ padding: '14px', textAlign: 'center' }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>Semi Custom</div>
+                      <div style={{ fontSize: '0.7rem', color: selectedMode === 'semi_custom' ? '#fff' : 'var(--text-secondary)' }}>
+                        Override specific rules
+                      </div>
+                    </button>
+                    <button
+                      className={`yn-btn ${selectedMode === 'full_custom' ? 'selected' : ''}`}
+                      onClick={() => setSelectedMode('full_custom')}
+                      style={{ padding: '14px', textAlign: 'center' }}
+                    >
+                      <div style={{ fontWeight: 700, marginBottom: 4, fontSize: '0.85rem' }}>Guidelines</div>
+                      <div style={{ fontSize: '0.7rem', color: selectedMode === 'full_custom' ? '#fff' : 'var(--text-secondary)' }}>
+                        Upload your own guidelines PDF
+                      </div>
+                    </button>
                   </div>
 
                   {selectedMode === 'semi_custom' && (
