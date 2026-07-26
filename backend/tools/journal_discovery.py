@@ -287,6 +287,111 @@ def extract_rules_from_text(text: str, journal_name: str) -> dict:
     if missing:
         raise RuntimeError(f"Extracted rules missing keys: {missing}")
 
+    rules = _fill_defaults(rules)
+
+    return rules
+
+
+def _fill_defaults(rules: dict) -> dict:
+    """Replace any None/null values with sensible academic defaults."""
+    defaults = {
+        "equations": {
+            "numbering": "right_aligned",
+            "numbering_format": "(1)",
+        },
+        "title_page": {
+            "title_case": "Title Case",
+            "title_bold": True,
+            "title_centered": True,
+            "title_font_size": 14,
+        },
+        "abstract": {
+            "label": "Abstract",
+            "label_bold": True,
+            "label_centered": False,
+            "label_italic": False,
+            "max_words": 250,
+            "indent_first_line": False,
+            "keywords_present": True,
+            "keywords_label": "Keywords:",
+            "keywords_italic": False,
+        },
+        "headings": {
+            "H1": {"bold": True, "italic": False, "centered": False, "underline": False, "case": "Title Case", "numbering": "none", "font_size": 14},
+            "H2": {"bold": True, "italic": False, "centered": False, "underline": False, "case": "Title Case", "numbering": "numeric", "font_size": 12},
+            "H3": {"bold": True, "italic": True, "centered": False, "underline": False, "case": "Sentence case", "numbering": "none", "font_size": 12},
+        },
+        "citations": {
+            "style": "author-date",
+            "brackets": "parentheses",
+            "format_one_author": "(Author Year)",
+            "format_two_authors": "(Author & Author Year)",
+            "format_three_plus": "(Author et al. Year)",
+            "format_numbered": None,
+            "include_page_for_quotes": False,
+            "page_format": "p. 45",
+        },
+        "references": {
+            "section_label": "References",
+            "label_bold": True,
+            "label_centered": False,
+            "label_italic": False,
+            "ordering": "alphabetical",
+            "hanging_indent": True,
+            "indent_size": "0.5in",
+            "line_spacing": 2.0,
+            "space_between_entries": True,
+        },
+        "figures": {
+            "label_prefix": "Figure",
+            "label_bold": True,
+            "label_italic": False,
+            "caption_position": "below",
+            "caption_italic": True,
+            "caption_alignment": "left",
+            "numbering": "arabic",
+            "note_label": "Note:",
+        },
+        "tables": {
+            "label_prefix": "Table",
+            "label_bold": True,
+            "label_italic": False,
+            "caption_position": "above",
+            "caption_italic": True,
+            "caption_alignment": "left",
+            "numbering": "arabic",
+            "border_style": "full",
+            "note_label": "Note:",
+        },
+        "general_rules": {
+            "doi_format": "doi:10.xxxx/xxxxx",
+            "url_format": "URL",
+            "date_format": "YYYY-MM-DD",
+            "et_al_threshold": 3,
+            "use_ampersand_in_citations": False,
+            "use_ampersand_in_references": False,
+            "oxford_comma": True,
+        },
+    }
+
+    def _merge(defaults_obj, target):
+        if not isinstance(defaults_obj, dict) or not isinstance(target, dict):
+            return target
+        for key, default_val in defaults_obj.items():
+            if key not in target:
+                target[key] = default_val
+            elif isinstance(default_val, dict) and isinstance(target[key], dict):
+                _merge(default_val, target[key])
+            elif target[key] is None:
+                target[key] = default_val
+        return target
+
+    for section, section_defaults in defaults.items():
+        if section not in rules:
+            rules[section] = section_defaults
+        elif isinstance(rules[section], dict):
+            _merge(section_defaults, rules[section])
+
     return rules
 
 
