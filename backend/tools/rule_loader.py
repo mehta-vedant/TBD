@@ -1,4 +1,5 @@
 import json
+import re
 from pathlib import Path
 from typing import Any, Optional
 
@@ -6,6 +7,17 @@ from tools.logger import get_logger
 from tools.tool_errors import RuleValidationError
 
 logger = get_logger(__name__)
+
+# Import discovery module lazily to avoid circular imports
+_discovery = None
+
+
+def _get_discovery():
+    global _discovery
+    if _discovery is None:
+        from tools import journal_discovery
+        _discovery = journal_discovery
+    return _discovery
 
 # Map of accepted journal name variations (all lowercase) → filename
 JOURNAL_MAP = {
@@ -91,9 +103,45 @@ def _get_schema() -> dict | None:
     return _RULES_SCHEMA
 
 
+def _find_extracted_rules(journal_style: str) -> dict | None:
+    """
+    Search the extracted/ folder for a cached rules file matching this journal.
+    Returns parsed rules dict or None.
+    """
+    extracted_dir = RULES_DIR / "extracted"
+    if not extracted_dir.exists():
+        return None
+
+    slug = re.sub(r"[^a-z0-9]+", "-", journal_style.lower()).strip("-")[:60]
+    cache_file = extracted_dir / f"{slug}.json"
+    if cache_file.exists():
+        try:
+            data = json.loads(cache_file.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and "style_name" in data:
+                logger.info("[RULES] Found extracted rules: %s", cache_file.name)
+                return data
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            pass
+
+    for f in extracted_dir.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if isinstance(data, dict) and data.get("style_name", "").lower() == journal_style.lower():
+                logger.info("[RULES] Found extracted rules by style_name: %s", f.name)
+                return data
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    return None
+
+
 def load_rules(journal_style: str) -> dict:
     """
     Load formatting rules for the given journal style.
+
+    Fallback chain:
+    1. Built-in JOURNAL_MAP (instant)
+    2. Previously extracted rules in rules/extracted/ (fast)
+    3. Dynamic discovery via DuckDuckGo + Gemini (slow, ~5-8s, cached after first)
 
     Uses in-memory cache to avoid repeated disk reads.
     Validates against rules_schema.json if jsonschema is installed.
@@ -111,56 +159,81 @@ def load_rules(journal_style: str) -> dict:
     key = journal_style.lower().strip()
     filename = JOURNAL_MAP.get(key)
 
-    if not filename:
-        raise RuleValidationError(
-            f"Journal '{journal_style}' not found.\n"
-            f"Supported journals: {', '.join(_DISPLAY_NAMES)}"
-        )
+    if filename:
+        cache_key = f"builtin:{filename}"
+    else:
+        cache_key = f"dynamic:{key}"
 
-    # Return from cache if already loaded
-    if filename in _RULE_CACHE:
-        logger.debug("[RULES] Cache hit for %s", filename)
-        return _RULE_CACHE[filename]
+    if cache_key in _RULE_CACHE:
+        logger.debug("[RULES] Cache hit for %s", cache_key)
+        return _RULE_CACHE[cache_key]
 
-    rules_path = RULES_DIR / filename
+    rules = None
 
-    if not rules_path.exists():
-        raise FileNotFoundError(
-            f"Rules file not found: {rules_path}\n"
-            f"Make sure {filename} exists in backend/rules/"
-        )
+    # Path 1: Built-in journal
+    if filename:
+        rules_path = RULES_DIR / filename
+        if not rules_path.exists():
+            raise FileNotFoundError(
+                f"Rules file not found: {rules_path}\n"
+                f"Make sure {filename} exists in backend/rules/"
+            )
+        try:
+            with open(rules_path, "r", encoding="utf-8") as f:
+                rules = json.load(f)
+        except json.JSONDecodeError as e:
+            raise RuleValidationError(
+                f"Rules file '{filename}' is corrupted or invalid JSON: {e}"
+            ) from e
 
-    try:
-        with open(rules_path, "r", encoding="utf-8") as f:
-            rules = json.load(f)
-    except json.JSONDecodeError as e:
-        raise RuleValidationError(
-            f"Rules file '{filename}' is corrupted or invalid JSON: {e}"
-        ) from e
+    # Path 2: Check extracted cache
+    if rules is None:
+        rules = _find_extracted_rules(journal_style)
 
-    # Schema validation (non-blocking — warns if jsonschema unavailable)
+    # Path 3: Dynamic discovery (search + fetch + Gemini extraction)
+    if rules is None:
+        discovery = _get_discovery()
+        try:
+            logger.info("[RULES] Discovering rules for '%s' via web search...", journal_style)
+            rules = discovery.discover_journal(journal_style)
+        except Exception as e:
+            raise RuleValidationError(
+                f"Could not find or extract rules for '{journal_style}'.\n"
+                f"Discovery failed: {e}\n"
+                f"Supported built-in journals: {', '.join(_DISPLAY_NAMES)}\n"
+                f"You can also upload a guidelines PDF via Full Custom mode."
+            )
+
+    # Schema validation (non-blocking)
     schema = _get_schema()
     if schema is not None:
         try:
             import jsonschema
             jsonschema.validate(instance=rules, schema=schema)
-            logger.debug("[RULES] Schema validation passed for %s", filename)
         except jsonschema.ValidationError as e:
-            raise RuleValidationError(
-                f"Rules file '{filename}' failed schema validation: {e.message}"
-            ) from e
+            logger.warning("[RULES] Schema validation warning for '%s': %s", journal_style, e.message)
         except Exception as e:
-            logger.warning("[RULES] Schema validation error for %s: %s", filename, e)
+            logger.warning("[RULES] Schema validation error for '%s': %s", journal_style, e)
 
-    # Store in cache
-    _RULE_CACHE[filename] = rules
-    logger.info("[RULES] Loaded and cached %s (%d top-level sections)", filename, len(rules))
+    _RULE_CACHE[cache_key] = rules
+    logger.info("[RULES] Loaded rules for '%s' (%d top-level sections)", journal_style, len(rules))
     return rules
 
 
 def get_supported_journals() -> list:
-    """Return list of supported journal display names."""
-    return list(_DISPLAY_NAMES)
+    """Return list of supported journal display names (built-in + extracted)."""
+    journals = list(_DISPLAY_NAMES)
+    extracted_dir = RULES_DIR / "extracted"
+    if extracted_dir.exists():
+        for f in sorted(extracted_dir.glob("*.json")):
+            try:
+                data = json.loads(f.read_text(encoding="utf-8"))
+                name = data.get("style_name", f.stem)
+                if name not in journals:
+                    journals.append(name)
+            except (json.JSONDecodeError, UnicodeDecodeError):
+                continue
+    return journals
 
 
 def validate_rules(rules: dict) -> bool:
