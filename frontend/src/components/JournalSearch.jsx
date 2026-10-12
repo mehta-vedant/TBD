@@ -1,6 +1,9 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// Keep discovery on the same backend as upload, scoring, and formatting.
+// VITE_BACKEND_URL is the documented production setting; VITE_API_URL remains
+// as a compatibility fallback for older local environments.
+const API_BASE = import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 const POPULAR_JOURNALS = [
   'APA 7th Edition',
