@@ -170,6 +170,8 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
   const [query, setQuery] = useState('')
   const [focused, setFocused] = useState(false)
   const [extracting, setExtracting] = useState(null)
+  const [draft, setDraft] = useState(null)
+  const [approvalError, setApprovalError] = useState('')
   const [highlightIdx, setHighlightIdx] = useState(-1)
   const inputRef = useRef(null)
   const wrapperRef = useRef(null)
@@ -213,17 +215,13 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
   const BUILTIN_JOURNALS = ['APA 7th Edition', 'IEEE', 'Vancouver', 'Springer', 'Chicago']
 
   const handlePick = (name) => {
+    if (!BUILTIN_JOURNALS.includes(name)) {
+      handleDiscover(name)
+      return
+    }
     setQuery(name)
     setFocused(false)
     onSelect(name, 'built-in')
-    // Warm cache in background for non-built-in curated journals
-    if (!BUILTIN_JOURNALS.includes(name)) {
-      fetch(`${API_BASE}/journals/extract`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name }),
-      }).catch(() => {})
-    }
   }
 
   const handleDiscover = async (name) => {
@@ -232,7 +230,7 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), 90000)
     try {
-      const res = await fetch(`${API_BASE}/journals/extract`, {
+      const res = await fetch(`${API_BASE}/journals/discover`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -240,10 +238,10 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
       })
       const data = await res.json()
       if (data.success) {
+        setDraft(data.draft)
         setQuery(name)
-        onSelect(name, 'extracted')
       } else {
-        alert(`Could not find rules for "${name}". Try a more specific journal name or use Full Custom.`)
+        alert(data?.detail?.error || `Could not find rules for "${name}". Try a more specific journal name or use Full Custom.`)
       }
     } catch (err) {
       if (err.name === 'AbortError') {
@@ -257,7 +255,37 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
     }
   }
 
-  const isBuiltin = selectedJournal && POPULAR_JOURNALS.some(j => j === selectedJournal)
+  const selectSource = async (sourceId) => {
+    if (!draft) return
+    setExtracting(draft.journal_name)
+    setApprovalError('')
+    try {
+      const res = await fetch(`${API_BASE}/journals/discover/${draft.draft_id}/select-source`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source_id: sourceId }),
+      })
+      const data = await res.json()
+      if (!data.success) throw new Error(data?.detail?.error || 'Could not analyze that source.')
+      setDraft(data.draft)
+    } catch (err) { setApprovalError(err.message) }
+    finally { setExtracting(null) }
+  }
+
+  const approveDraft = async () => {
+    if (!draft) return
+    setExtracting(draft.journal_name)
+    setApprovalError('')
+    try {
+      const res = await fetch(`${API_BASE}/journals/discover/${draft.draft_id}/approve`, { method: 'POST' })
+      const data = await res.json()
+      if (!data.success) throw new Error(data?.detail?.error || 'This rule draft could not be approved.')
+      setDraft(null)
+      onSelect(data.rule_set.journal_name, 'approved', data.rule_set.rule_set_id)
+    } catch (err) { setApprovalError(err.message) }
+    finally { setExtracting(null) }
+  }
+
+  const isBuiltin = selectedJournal && BUILTIN_JOURNALS.includes(selectedJournal)
 
   return (
     <div ref={wrapperRef} style={{ position: 'relative' }}>
@@ -345,6 +373,22 @@ export default function JournalSearch({ onSelect, selectedJournal, disabled }) {
               <span style={{ marginLeft: 'auto', fontSize: '0.7rem', opacity: 0.6 }}>Enter ↵</span>
             </button>
           )}
+        </div>
+      )}
+
+      {draft && (
+        <div style={{ marginTop: 10, padding: 14, border: '1.5px solid var(--blue)', borderRadius: 'var(--radius-sm)', background: 'var(--bg-soft)' }}>
+          <div style={{ fontWeight: 700, marginBottom: 5 }}>Review journal-rule evidence</div>
+          <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: 10 }}>
+            {draft.verification_coverage}% of rule sections have source evidence. Approve before this journal can format a paper.
+          </div>
+          {draft.selected_source && <div style={{ fontSize: '0.8rem', marginBottom: 10 }}><strong>Selected source:</strong> <a href={draft.selected_source.url} target="_blank" rel="noreferrer">{draft.selected_source.title}</a></div>}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 10 }}>
+            {(draft.candidates || []).slice(0, 4).map(source => <button key={source.id} onClick={() => selectSource(source.id)} disabled={extracting || source.id === draft.selected_source?.id} style={{ border: '1px solid var(--border)', background: source.id === draft.selected_source?.id ? 'var(--blue)' : '#fff', color: source.id === draft.selected_source?.id ? '#fff' : 'var(--text)', borderRadius: 6, padding: '5px 8px', cursor: 'pointer', fontSize: '0.72rem' }}>{source.official_likelihood} source</button>)}
+          </div>
+          {draft.validation_errors?.length > 0 && <div style={{ color: 'var(--error)', fontSize: '0.78rem', marginBottom: 8 }}>{draft.validation_errors[0]}</div>}
+          {approvalError && <div style={{ color: 'var(--error)', fontSize: '0.78rem', marginBottom: 8 }}>{approvalError}</div>}
+          <button onClick={approveDraft} disabled={extracting || draft.status !== 'ready_for_approval'} className="btn-primary" style={{ width: 'auto', margin: 0, padding: '8px 12px', fontSize: '0.8rem' }}>Approve verified rules</button>
         </div>
       )}
     </div>

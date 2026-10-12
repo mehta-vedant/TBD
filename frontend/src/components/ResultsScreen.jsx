@@ -139,6 +139,8 @@ export default function ResultsScreen({ result, trustScore, onDownload, onDownlo
   const iframeRef = useRef(null)
 
   const report = result.compliance_report || {}
+  const verified = result.verified_compliance || report.verified_compliance || null
+  const critic = result.critic_report || null
   const applied = report.applied_transformations || report.changes_made || []
   const skipped = report.skipped_transformations || []
   const manual = report.manual_action_required || []
@@ -275,6 +277,28 @@ export default function ResultsScreen({ result, trustScore, onDownload, onDownlo
         <div className={`rs-col rs-col-score ${mobileTab === 'score' ? 'mobile-visible' : ''}`}>
           <div className="rs-panel">
             <div className="rs-panel-header">Compliance Score</div>
+
+            {verified && (
+              <div style={{ margin: '14px 16px 0', padding: '12px', borderRadius: 10, background: 'var(--bg-soft)', border: '1px solid var(--border)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'baseline' }}>
+                  <strong>Verified compliance</strong>
+                  <strong style={{ color: verified.verified_score >= 80 ? 'var(--success)' : 'var(--orange)' }}>{verified.verified_score ?? '—'}/100</strong>
+                </div>
+                <div style={{ fontSize: '0.78rem', color: 'var(--text-secondary)', marginTop: 4 }}>
+                  {verified.verification_coverage ?? 0}% coverage · {verified.verified_sections ?? 0}/{verified.total_sections ?? 0} categories measured deterministically
+                </div>
+                {result.rule_set_id && <div style={{ fontSize: '0.72rem', color: 'var(--text-secondary)', marginTop: 4 }}>Approved rule set: {result.rule_set_id}</div>}
+                {verified.unverified_areas?.length > 0 && <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)', marginTop: 4 }}>Not yet verified: {verified.unverified_areas.join(', ')}</div>}
+              </div>
+            )}
+
+            {critic && (
+              <div style={{ margin: '10px 16px 0', padding: '10px 12px', borderRadius: 10, background: critic.status === 'pass' ? 'rgba(34,197,94,0.08)' : 'rgba(245,158,11,0.10)', fontSize: '0.78rem' }}>
+                <strong>Generated DOCX verification:</strong> {critic.summary}
+                {critic.coverage !== undefined && <span style={{ color: 'var(--text-secondary)' }}> {critic.coverage}% output coverage.</span>}
+                {critic.repair_attempt?.attempted && <div style={{ marginTop: 4, color: 'var(--text-secondary)' }}>One safe repair pass normalized {critic.repair_attempt.changed_runs} text runs, then the file was verified again.</div>}
+              </div>
+            )}
 
             {/* Side-by-side gauges */}
             <div className="rs-score-comparison">

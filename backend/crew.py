@@ -19,7 +19,7 @@ from agents import (
     create_validate_agent,
 )
 from agents.validate_agent import SECTION_WEIGHTS
-from tools.compliance_checker import apply_deterministic_checks, run_deterministic_checks
+from tools.compliance_checker import apply_deterministic_checks, build_verified_compliance, run_deterministic_checks
 from tools.docx_reader import extract_docx_text
 from tools.docx_writer import (
     build_apa_docx, build_chicago_docx, build_ieee_docx, build_springer_docx,
@@ -28,6 +28,7 @@ from tools.docx_writer import (
 from tools.logger import get_logger
 from tools.media_extractor import extract_all_media, map_figures_to_images, map_tables_to_captions
 from tools.pre_format_scorer import score_pre_format
+from tools.post_format_verifier import repair_generated_docx_once, verify_generated_docx
 from tools.rule_loader import load_rules
 from tools.tool_errors import (
     DocumentWriteError,
@@ -1362,9 +1363,12 @@ def run_pipeline(paper_content: str, journal_style: str, source_docx_path: Optio
         paper_structure = extract_json_from_llm(parse_raw)
         det_checks = run_deterministic_checks(paper_structure, rules)
         if det_checks:
+            verified_compliance = build_verified_compliance(det_checks, SECTION_WEIGHTS)
             compliance_report = apply_deterministic_checks(
                 compliance_report, det_checks, SECTION_WEIGHTS
             )
+            compliance_report["verified_compliance"] = verified_compliance
+            compliance_report["ai_assessment_score"] = overall_score
             overall_score = compliance_report.get("overall_score", overall_score)
             logger.info(
                 "[PIPELINE] Deterministic checks applied (%d) — final_score=%s",
@@ -1455,9 +1459,18 @@ def run_pipeline(paper_content: str, journal_style: str, source_docx_path: Optio
 
     # ── Post-format scoring — re-score the output DOCX against same rules ──
     post_format_score: dict = {}
+    critic_report: dict = {}
     try:
         output_text = extract_docx_text(str(output_path))
         post_format_score = score_pre_format(output_text, rules)
+        critic_report = verify_generated_docx(str(output_path), rules)
+        repair = repair_generated_docx_once(str(output_path), rules, critic_report)
+        critic_report["repair_attempt"] = repair
+        if repair.get("attempted"):
+            critic_report = verify_generated_docx(str(output_path), rules)
+            critic_report["repair_attempt"] = repair
+            output_text = extract_docx_text(str(output_path))
+            post_format_score = score_pre_format(output_text, rules)
         logger.info(
             "[PIPELINE] Post-format score: %d (from output DOCX)",
             post_format_score.get("total_score", -1),
@@ -1492,8 +1505,10 @@ def run_pipeline(paper_content: str, journal_style: str, source_docx_path: Optio
         "interpretation_results": interpretation_results,
         "changes_made": enriched_changes,  # Rule-referenced, from transform PHASE B
         "post_format_score": post_format_score,
+        "critic_report": critic_report,
         "formatting_report": formatting_report,
         "document_structure": document_structure,
+        "verified_compliance": compliance_report.get("verified_compliance", {}),
     }
 
     # Improvement 7: Cache for instant re-runs of identical submissions

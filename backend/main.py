@@ -99,6 +99,7 @@ def _run_pipeline_job(
     overrides: Optional[str] = None,
     custom_rules: Optional[str] = None,
     source_file_path: Optional[str] = None,
+    rule_set_id: Optional[str] = None,
     **kwargs,
 ) -> None:
     """
@@ -176,8 +177,10 @@ def _run_pipeline_job(
                 "interpretation_results": result.get("interpretation_results", {}),
                 "fidelity_warnings": fidelity_warnings,
                 "post_format_score": result.get("post_format_score", {}),
+                "critic_report": result.get("critic_report", {}),
                 "formatting_report": result.get("formatting_report", {}),
                 "document_structure": result.get("document_structure", {}),
+                "rule_set_id": rule_set_id,
             },
         }
     except Exception as e:
@@ -727,6 +730,7 @@ async def upload_document(
 async def score_pre(
     doc_id: str = Form(...),
     journal: str = Form(...),
+    rule_set_id: str = Form(""),
     mode: str = Form("standard"),
     overrides: str = Form(""),
     custom_rules: str = Form(""),
@@ -770,7 +774,10 @@ async def score_pre(
 
     try:
         # Determine rules source based on mode
-        if mode == "full_custom" and custom_rules and custom_rules.strip():
+        if rule_set_id.strip():
+            from tools.journal_intelligence import load_approved_rule_set
+            rules = load_approved_rule_set(rule_set_id.strip())["rules"]
+        elif mode == "full_custom" and custom_rules and custom_rules.strip():
             try:
                 rules = json.loads(custom_rules)
                 logger.info("[PRE-SCORE:%s] Using custom rules (%d keys)", doc_id, len(rules))
@@ -792,6 +799,7 @@ async def score_pre(
             "success": True,
             "doc_id": doc_id,
             "journal": journal,
+            "rule_set_id": rule_set_id or None,
             "mode": mode,
             "pre_format_score": result,
         })
@@ -855,6 +863,7 @@ async def format_document(
     background_tasks: BackgroundTasks,
     doc_id: str = Form(None),
     journal: str = Form(...),
+    rule_set_id: str = Form(""),
     mode: str = Form("standard"),
     overrides: str = Form(""),
     custom_rules: str = Form(""),
@@ -965,6 +974,18 @@ async def format_document(
         })
 
     # ── Handle full_custom guideline PDF ──────────────────────────────────
+    if rule_set_id.strip():
+        try:
+            from tools.journal_intelligence import load_approved_rule_set
+            approved = load_approved_rule_set(rule_set_id.strip())
+            custom_rules = json.dumps(approved["rules"])
+            journal = approved["journal_name"]
+            mode = "full_custom"
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail={
+                "success": False, "error": str(exc), "step": "rules",
+            })
+
     guideline_pdf_bytes = None
     if mode == "full_custom" and guideline_pdf:
         guideline_pdf_bytes = await guideline_pdf.read()
@@ -980,6 +1001,7 @@ async def format_document(
         "created_at": time.time(),
         "journal": journal,
         "mode": mode,
+        "rule_set_id": rule_set_id or None,
         "filename": original_filename,
     }
 
@@ -996,6 +1018,7 @@ async def format_document(
         overrides=overrides,
         custom_rules=custom_rules,
         source_file_path=source_file_path,
+        rule_set_id=rule_set_id or None,
         guideline_pdf_bytes=guideline_pdf_bytes,
     )
 
@@ -2031,6 +2054,55 @@ async def search_journals(q: str = "") -> JSONResponse:
         "success": True,
         "results": built_in_hits + web_hits,
     })
+
+
+# ---------------------------------------------------------------------------
+# Evidence-backed journal intelligence
+# ---------------------------------------------------------------------------
+@app.post("/journals/discover")
+async def discover_journal_with_evidence(request: Request) -> JSONResponse:
+    """Research an unknown journal and return a draft requiring user approval."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    name = str(body.get("name", "")).strip()
+    try:
+        from tools.journal_intelligence import discover_journal
+        draft = await asyncio.get_event_loop().run_in_executor(None, lambda: discover_journal(name))
+        return JSONResponse({"success": True, "draft": draft})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"success": False, "error": str(exc)})
+    except Exception as exc:
+        logger.exception("[JOURNAL_INTELLIGENCE] Discovery failed for %r", name)
+        raise HTTPException(status_code=502, detail={"success": False, "error": f"Journal discovery failed: {str(exc)[:180]}"})
+
+
+@app.post("/journals/discover/{draft_id}/select-source")
+async def select_journal_discovery_source(draft_id: str, request: Request) -> JSONResponse:
+    """Re-run bounded extraction against a user-selected candidate source."""
+    try:
+        body = await request.json()
+    except Exception:
+        body = {}
+    source_id = str(body.get("source_id", "")).strip()
+    try:
+        from tools.journal_intelligence import select_source
+        draft = await asyncio.get_event_loop().run_in_executor(None, lambda: select_source(draft_id, source_id))
+        return JSONResponse({"success": True, "draft": draft})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"success": False, "error": str(exc)})
+
+
+@app.post("/journals/discover/{draft_id}/approve")
+async def approve_journal_discovery_draft(draft_id: str) -> JSONResponse:
+    """Persist a valid rule draft. Only approved rule sets are reusable by formatting."""
+    try:
+        from tools.journal_intelligence import approve_draft
+        approved = approve_draft(draft_id)
+        return JSONResponse({"success": True, "rule_set": approved})
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail={"success": False, "error": str(exc)})
 
 
 @app.post("/journals/extract")

@@ -199,6 +199,73 @@ def apply_deterministic_checks(
     return compliance_report
 
 
+def build_verified_compliance(
+    checks: list[DeterministicCheck],
+    section_weights: dict,
+) -> dict:
+    """Aggregate exact checks without allowing later checks to overwrite earlier ones.
+
+    The output is deliberately separate from LLM judgement. A category score is
+    the arithmetic mean of its applicable deterministic checks; the global score
+    is the weighted mean of categories that have at least one applicable check.
+    This makes the result reproducible and exposes what was not verified.
+    """
+    grouped: dict[str, list[DeterministicCheck]] = {}
+    for check in checks:
+        grouped.setdefault(check.section, []).append(check)
+
+    breakdown: dict[str, dict] = {}
+    weighted_sum = 0.0
+    available_weight = 0.0
+    all_checks = []
+    for section, weight in section_weights.items():
+        section_checks = grouped.get(section, [])
+        if not section_checks:
+            breakdown[section] = {
+                "status": "unverified",
+                "score": None,
+                "coverage": 0,
+                "checks": [],
+                "issues": [],
+            }
+            continue
+        score = round(sum(check.score for check in section_checks) / len(section_checks))
+        failures = [check.issue for check in section_checks if not check.passed and check.issue]
+        serialized = [{
+            "id": check.check_id,
+            "name": check.check_name,
+            "passed": check.passed,
+            "score": check.score,
+            "detail": check.detail,
+            "rule_reference": check.rule_reference,
+        } for check in section_checks]
+        breakdown[section] = {
+            "status": "verified",
+            "score": score,
+            "coverage": 100,
+            "checks": serialized,
+            "issues": failures,
+        }
+        weighted_sum += score * weight
+        available_weight += weight
+        all_checks.extend(serialized)
+
+    verified_score = round(weighted_sum / available_weight) if available_weight else None
+    total_sections = len(section_weights)
+    verified_sections = sum(1 for item in breakdown.values() if item["status"] == "verified")
+    coverage = round(100 * verified_sections / total_sections) if total_sections else 0
+    return {
+        "verified_score": verified_score,
+        "verification_coverage": coverage,
+        "verified_sections": verified_sections,
+        "total_sections": total_sections,
+        "submission_ready": bool(verified_score is not None and verified_score >= 80 and coverage >= 70 and not any(not item["passed"] for item in all_checks)),
+        "breakdown": breakdown,
+        "checks": all_checks,
+        "unverified_areas": [name for name, item in breakdown.items() if item["status"] == "unverified"],
+    }
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Individual check implementations
 # ─────────────────────────────────────────────────────────────────────────────

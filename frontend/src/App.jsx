@@ -519,6 +519,7 @@ export default function App() {
   // Mode & config state
   const [selectedMode, setSelectedMode] = useState('standard')
   const [journal, setJournal] = useState('')
+  const [ruleSetId, setRuleSetId] = useState('')
   const [overrides, setOverrides] = useState({})
   const [guidelineFile, setGuidelineFile] = useState(null)
   const [customRules, setCustomRules] = useState(null)
@@ -706,6 +707,7 @@ export default function App() {
       const formData = new FormData()
       formData.append('doc_id', docId)
       formData.append('journal', journal)
+      if (ruleSetId) formData.append('rule_set_id', ruleSetId)
       formData.append('mode', selectedMode)
       if (selectedMode === 'semi_custom' && Object.keys(overrides).length > 0) {
         formData.append('overrides', JSON.stringify(overrides))
@@ -734,6 +736,7 @@ export default function App() {
       const formData = new FormData()
       formData.append('doc_id', docId)
       formData.append('journal', journal)
+      if (ruleSetId) formData.append('rule_set_id', ruleSetId)
       formData.append('mode', selectedMode)
       if (selectedMode === 'semi_custom' && Object.keys(overrides).length > 0) {
         formData.append('overrides', JSON.stringify(overrides))
@@ -786,6 +789,9 @@ export default function App() {
       preview_url: data.preview_url || null,
       compliance_report: report,
       post_format_score: data.post_format_score || null,
+      critic_report: data.critic_report || null,
+      verified_compliance: data.verified_compliance || report.verified_compliance || null,
+      rule_set_id: data.rule_set_id || null,
       document_structure: data.document_structure || null,
       interpretation_results: data.interpretation_results || {},
     }
@@ -839,7 +845,7 @@ export default function App() {
 
   const resetToTool = () => {
     setView('tool'); setFile(null); setDocId(null); setUploadInfo(null)
-    setJournal(''); setResult(null); setError('')
+    setJournal(''); setRuleSetId(''); setResult(null); setError('')
     setTrustScore(null); setSelectedMode('standard'); setOverrides({})
     setGuidelineFile(null); setCustomRules(null); setJobId(null)
   }
@@ -984,8 +990,9 @@ export default function App() {
               <div className="step-box">
                 <label className="form-label" style={{ marginBottom: 12, display: 'block' }}>Select Journal Style</label>
                 <JournalSearch
-                  onSelect={(journalName, source) => {
+                  onSelect={(journalName, source, approvedRuleSetId = '') => {
                     setJournal(journalName)
+                    setRuleSetId(approvedRuleSetId)
                     setSelectedMode('standard')
                   }}
                   selectedJournal={journal && journal !== 'Custom' ? journal : null}
@@ -996,6 +1003,7 @@ export default function App() {
                 <button
                   onClick={() => {
                     setJournal('Custom')
+                    setRuleSetId('')
                     setSelectedMode('full_custom')
                   }}
                   style={{

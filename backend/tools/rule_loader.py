@@ -134,14 +134,34 @@ def _find_extracted_rules(journal_style: str) -> dict | None:
     return None
 
 
+def _find_approved_rules(journal_style: str) -> dict | None:
+    """Return the newest explicitly approved discovery result for a journal."""
+    approved_dir = RULES_DIR / "approved"
+    if not approved_dir.exists():
+        return None
+    matches = []
+    for path in approved_dir.glob("*.json"):
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            if payload.get("journal_name", "").lower() == journal_style.lower() and payload.get("status") == "approved":
+                matches.append((payload.get("approved_at", 0), payload))
+        except (json.JSONDecodeError, UnicodeDecodeError):
+            continue
+    if matches:
+        latest = max(matches, key=lambda item: item[0])[1]
+        logger.info("[RULES] Found approved evidence-backed rule set: %s", latest.get("rule_set_id", "unknown"))
+        return latest.get("rules")
+    return None
+
+
 def load_rules(journal_style: str) -> dict:
     """
     Load formatting rules for the given journal style.
 
     Fallback chain:
     1. Built-in JOURNAL_MAP (instant)
-    2. Previously extracted rules in rules/extracted/ (fast)
-    3. Dynamic discovery via DuckDuckGo + Gemini (slow, ~5-8s, cached after first)
+    2. Explicitly approved discovery results in rules/approved/ (fast)
+    3. Legacy extracted rules in rules/extracted/ (backward compatibility)
 
     Uses in-memory cache to avoid repeated disk reads.
     Validates against rules_schema.json if jsonschema is installed.
@@ -186,23 +206,22 @@ def load_rules(journal_style: str) -> dict:
                 f"Rules file '{filename}' is corrupted or invalid JSON: {e}"
             ) from e
 
-    # Path 2: Check extracted cache
+    # Path 2: Reuse evidence-backed rules only after explicit approval.
+    if rules is None:
+        rules = _find_approved_rules(journal_style)
+
+    # Path 3: legacy extracted cache. New discovery must go through the
+    # approval endpoints; this remains only so older locally-created files work.
     if rules is None:
         rules = _find_extracted_rules(journal_style)
 
-    # Path 3: Dynamic discovery (search + fetch + Gemini extraction)
+    # Do not silently discover and trust an arbitrary web result here. The API
+    # exposes /journals/discover for research and user approval first.
     if rules is None:
-        discovery = _get_discovery()
-        try:
-            logger.info("[RULES] Discovering rules for '%s' via web search...", journal_style)
-            rules = discovery.discover_journal(journal_style)
-        except Exception as e:
-            raise RuleValidationError(
-                f"Could not find or extract rules for '{journal_style}'.\n"
-                f"Discovery failed: {e}\n"
-                f"Supported built-in journals: {', '.join(_DISPLAY_NAMES)}\n"
-                f"You can also upload a guidelines PDF via Full Custom mode."
-            )
+        raise RuleValidationError(
+            f"No approved rules are available for '{journal_style}'. "
+            "Use journal discovery, review the evidence, and approve a source first."
+        )
 
     # Schema validation (non-blocking)
     schema = _get_schema()
