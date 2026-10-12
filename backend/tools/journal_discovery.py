@@ -283,8 +283,20 @@ def _call_gemini(prompt: str, text: str) -> str:
         "contents": [{"parts": [{"text": prompt + "\n\n" + text}]}],
         "generationConfig": {"temperature": 0.1, "maxOutputTokens": 8192},
     }
-    resp = httpx.post(url, json=payload, timeout=120)
-    resp.raise_for_status()
+    try:
+        resp = httpx.post(url, json=payload, timeout=120)
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        if exc.response.status_code in (401, 403):
+            raise RuntimeError(
+                "Gemini access was denied. Configure an active GEMINI_API_KEY "
+                "with access to the Generative Language API, then restart the backend."
+            ) from None
+        raise RuntimeError(
+            f"Gemini rule extraction failed with HTTP {exc.response.status_code}."
+        ) from None
+    except httpx.RequestError as exc:
+        raise RuntimeError("Could not reach Gemini for journal-rule extraction.") from None
     data = resp.json()
 
     candidates = data.get("candidates", [])
